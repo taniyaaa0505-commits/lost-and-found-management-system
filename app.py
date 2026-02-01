@@ -1,23 +1,15 @@
 from flask import Flask, render_template, request, redirect, url_for, session
-import mysql.connector
+
 import os
+import psycopg2
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = "lostandfound123"
 
-db = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="Radhika1@",
-    database="lostfound"
-)
-cursor = db.cursor(buffered=True)
-def reconnect_db():
-    global db, cursor
-    if not db.is_connected():
-        db.reconnect(attempts=3, delay=2)
-        cursor = db.cursor(buffered=True)
 
-
+def get_db():
+    return psycopg2.connect(os.environ['postgresql://neondb_owner:npg_8NCXkQTxluO3@ep-shiny-snow-ahxz01gr-pooler.c-3.us-east-1.aws.neon.tech/lostfound?sslmode=require&channel_binding=require'])
+conn= get_db()
+cursor=conn.cursor()
 # ---------------- LOGIN PAGE ----------------
 @app.route("/")
 def login_page():
@@ -38,7 +30,7 @@ def signup():
             values = (name, email, password)
 
             cursor.execute(query, values)
-            db.commit()
+            conn.commit()
 
             print("DATA INSERTED SUCCESSFULLY")
 
@@ -142,7 +134,7 @@ def report_lost():
             item_name, description,lost_location,
             date_lost, contact, reported_by
         ))
-        db.commit()
+        conn.commit()
 
         return redirect(url_for("dashboard"))
 
@@ -172,7 +164,7 @@ def report_found():
             item_name, description,found_location,
             date_found, contact, reported_by
         ))
-        db.commit()
+        conn.commit()
 
         return redirect(url_for("dashboard"))
 
@@ -181,7 +173,6 @@ def report_found():
 
 @app.route("/admin_dashboard")
 def admin_dashboard():
-    reconnect_db()
     
     cursor.execute("SELECT * FROM lost_items")
     lost_items = cursor.fetchall()
@@ -196,19 +187,17 @@ def admin_dashboard():
     )
 @app.route("/delete_lost/<int:id>")
 def delete_lost(id):
-    reconnect_db()
+    
     cursor.execute("DELETE FROM lost_items WHERE id=%s", (id,))
-    db.commit()
+    conn.commit()
     return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/delete_found/<int:id>")
 def delete_found(id):
-    reconnect_db()
+    
     cursor.execute("DELETE FROM found_items WHERE id=%s", (id,))
-    db.commit()
+    conn.commit()
     return redirect(url_for("admin_dashboard"))
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT",5000)))
