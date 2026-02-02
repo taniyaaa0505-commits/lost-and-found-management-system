@@ -1,15 +1,14 @@
 from flask import Flask, render_template, request, redirect, url_for, session
-
-import os
 import psycopg2
-app = Flask(__name__, static_folder="static", template_folder="templates")
+import os
+
+app = Flask(__name__)
 app.secret_key = "lostandfound123"
 
+db = psycopg2.connect(os.environ.get("DATABASE_URL"))
+cursor = db.cursor()
 
-def get_db():
-    return psycopg2.connect(os.environ['postgresql://neondb_owner:npg_8NCXkQTxluO3@ep-shiny-snow-ahxz01gr-pooler.c-3.us-east-1.aws.neon.tech/lostfound?sslmode=require&channel_binding=require'])
-conn= get_db()
-cursor=conn.cursor()
+
 # ---------------- LOGIN PAGE ----------------
 @app.route("/")
 def login_page():
@@ -30,7 +29,7 @@ def signup():
             values = (name, email, password)
 
             cursor.execute(query, values)
-            conn.commit()
+            db.commit()
 
             print("DATA INSERTED SUCCESSFULLY")
 
@@ -58,12 +57,11 @@ def login_user():
         if user:
             session["user"] = user[0]
             session["name"] = user[1]  
-            # ✅ ADMIN CHECK
-            if user[1] == "admin":
+            if email == "admin@gmail.com":
                 session["is_admin"] = True
             else:
                 session["is_admin"] = False
-
+                
             return redirect(url_for("dashboard"))
         else:
             return "INVALID EMAIL OR PASSWORD"
@@ -97,9 +95,9 @@ def view_lost():
         return redirect(url_for("login_page"))
 
     cursor.execute("SELECT * FROM lost_items")
-    items = cursor.fetchall()
+    lost_items = cursor.fetchall()
 
-    return render_template("view_lost.html", items=items)
+    return render_template("view_lost.html", lost_items=lost_items)
 
 @app.route("/view_found")
 def view_found():
@@ -107,9 +105,9 @@ def view_found():
         return redirect(url_for("login_page"))
 
     cursor.execute("SELECT * FROM found_items")
-    items = cursor.fetchall()
+    found_items = cursor.fetchall()
 
-    return render_template("view_found.html", items=items)
+    return render_template("view_found.html", found_items=found_items)
 
 @app.route("/report_lost", methods=["GET", "POST"])
 def report_lost():
@@ -134,7 +132,7 @@ def report_lost():
             item_name, description,lost_location,
             date_lost, contact, reported_by
         ))
-        conn.commit()
+        db.commit()
 
         return redirect(url_for("dashboard"))
 
@@ -164,7 +162,7 @@ def report_found():
             item_name, description,found_location,
             date_found, contact, reported_by
         ))
-        conn.commit()
+        db.commit()
 
         return redirect(url_for("dashboard"))
 
@@ -173,7 +171,9 @@ def report_found():
 
 @app.route("/admin_dashboard")
 def admin_dashboard():
-    
+    if not session.get("is_admin"):
+        return redirect(url_for("dashboard"))
+
     cursor.execute("SELECT * FROM lost_items")
     lost_items = cursor.fetchall()
 
@@ -185,19 +185,23 @@ def admin_dashboard():
         lost_items=lost_items,
         found_items=found_items
     )
+
+
+
+
 @app.route("/delete_lost/<int:id>")
 def delete_lost(id):
     
-    cursor.execute("DELETE FROM lost_items WHERE id=%s", (id,))
-    conn.commit()
+    cursor.execute("DELETE FROM lost_items WHERE id=%s" ,(id,))
+    db.commit()
     return redirect(url_for("admin_dashboard"))
-
 
 @app.route("/delete_found/<int:id>")
 def delete_found(id):
-    
-    cursor.execute("DELETE FROM found_items WHERE id=%s", (id,))
-    conn.commit()
+    cursor.execute("DELETE FROM found_items WHERE id=%s" ,(id,))
+    db.commit()
     return redirect(url_for("admin_dashboard"))
 
 
+if __name__ == "__main__":
+    app.run(debug=True)
